@@ -48,6 +48,16 @@ export function saveRows(key: string, rows: EntryRow[]): void {
   }
 }
 
+// 一次事务写多个模块：先拼好整份数据再一次落盘。localStorage 单次 setItem 是原子的，
+// 所以先 setItem 再换 cache——落盘抛错时 cache 不动，任何一份记录失败都不会留下半份结果。
+export function saveMany(entries: Record<string, EntryRow[]>): void {
+  const next = { ...allRows(), ...entries }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
+  }
+  cache = next
+}
+
 export function resetRows(key: string): EntryRow[] {
   const rows = clone(SEED_ROWS[key] ?? [])
   saveRows(key, rows)

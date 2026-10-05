@@ -63,6 +63,47 @@
       </tbody>
     </table>
 
+    <section class="sub-panel">
+      <h3 class="sub-title">
+        待核验清单（资料对账包）
+        <span v-if="pendingVerifyCount" class="verify-badge">{{ pendingVerifyCount }} 条待核验</span>
+      </h3>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>包编号</th>
+            <th>调查编号</th>
+            <th>遗迹编号</th>
+            <th>核验事项</th>
+            <th>处理策略</th>
+            <th>登记时间</th>
+            <th>状态</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in verifications" :key="String(item.id)">
+            <td>{{ item['包编号'] }}</td>
+            <td>{{ item['调查编号'] }}</td>
+            <td>{{ item['遗迹编号'] }}</td>
+            <td>{{ item['核验事项'] }}</td>
+            <td>{{ item['处理策略'] }}</td>
+            <td>{{ item['登记时间'] }}</td>
+            <td>{{ item.status }}</td>
+            <td>
+              <button v-if="item.status === '待核验'" class="link" type="button" @click="confirmVerify(item)">
+                确认核验
+              </button>
+              <span v-else>—</span>
+            </td>
+          </tr>
+          <tr v-if="!verifications.length">
+            <td colspan="8" class="empty-state">暂无待核验条目，导入考古调查资料对账包后会在这里列出</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条遗迹单位记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -79,6 +120,7 @@ import {
   moduleMeta,
   runAction as applyAction,
 } from '@/api/local-service'
+import { listFeatureVerifications, markFeatureVerified } from '@/api/survey-reconciliation'
 import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('feature')
@@ -91,6 +133,10 @@ const rows = ref<EntryRow[]>([])
 const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
+const verifications = ref<EntryRow[]>([])
+const pendingVerifyCount = computed(
+  () => verifications.value.filter((item) => String(item.status) === '待核验').length,
+)
 const filterFields = columns.slice(0, 3)
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
@@ -122,12 +168,24 @@ function runAction(action: string, row: EntryRow) {
   reload()
 }
 
+// 待核验清单来自考古调查资料对账包：确认核验只是把条目标记为已核验，不改遗迹数据。
+function confirmVerify(row: EntryRow) {
+  errorMessage.value = ''
+  const result = markFeatureVerified(Number(row.id))
+  if (!result.ok) {
+    errorMessage.value = result.message
+    return
+  }
+  reload()
+}
+
 function reload() {
   errorMessage.value = ''
   try {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    verifications.value = listFeatureVerifications()
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '遗迹单位列表读取失败'
   }
