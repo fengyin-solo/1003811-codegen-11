@@ -63,6 +63,42 @@
       </tbody>
     </table>
 
+    <section class="checklist">
+      <h3>调查对账待核验清单（{{ checklist.length }}）</h3>
+      <p class="page-desc">
+        来自考古调查资料对账包：包内遗迹编号与平台记录不一致时以平台记录为准，下列编号查无对应遗迹，待现场核对原件后勾销。
+      </p>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>来源调查编号</th>
+            <th>调查区域</th>
+            <th>包内遗迹编号</th>
+            <th>关联地表发现</th>
+            <th>核验原因</th>
+            <th>来源资料包</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in checklist" :key="item.id">
+            <td>{{ item.surveyNo }}</td>
+            <td>{{ item.area || '—' }}</td>
+            <td>{{ item.relicId }}</td>
+            <td>{{ item.findDescription || '—' }}</td>
+            <td>{{ item.reason }}</td>
+            <td>{{ item.packageNo }}</td>
+            <td class="row-actions">
+              <button class="link" type="button" @click="resolveItem(item.id)">现场核验完成</button>
+            </td>
+          </tr>
+          <tr v-if="!checklist.length">
+            <td colspan="7" class="empty-state">暂无待核验遗迹，调查对账记录均已与平台对上</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条遗迹单位记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -76,10 +112,12 @@ import { computed, onMounted, ref } from 'vue'
 import {
   downloadEntries,
   listEntries,
+  listFeatureChecklist,
   moduleMeta,
+  resolveFeatureChecklist,
   runAction as applyAction,
 } from '@/api/local-service'
-import type { EntryRow } from '@/data/types'
+import type { EntryRow, FeatureChecklistItem } from '@/data/types'
 
 const meta = moduleMeta('feature')
 const columns = ["遗迹编号", "所属探方", "遗迹类型", "开口层位", "打破关系", "平面形状", "填土特征", "记录状态"]
@@ -92,6 +130,7 @@ const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const checklist = ref<FeatureChecklistItem[]>([])
 const statusSummary = computed(() =>
   statuses.map((status: string) => ({
     status,
@@ -106,6 +145,16 @@ function resetFilters() {
 
 function exportRows() {
   downloadEntries(meta.key)
+}
+
+function resolveItem(id: number) {
+  errorMessage.value = ''
+  const result = resolveFeatureChecklist(id)
+  if (!result.ok) {
+    errorMessage.value = result.message
+    return
+  }
+  reload()
 }
 
 function openCreate() {
@@ -128,6 +177,7 @@ function reload() {
     const payload = listEntries(meta.key, filters.value)
     rows.value = payload.items
     total.value = payload.total
+    checklist.value = listFeatureChecklist(false)
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '遗迹单位列表读取失败'
   }
@@ -135,3 +185,13 @@ function reload() {
 
 onMounted(reload)
 </script>
+
+<style scoped>
+.checklist {
+  margin-top: 18px;
+}
+.checklist h3 {
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+</style>
